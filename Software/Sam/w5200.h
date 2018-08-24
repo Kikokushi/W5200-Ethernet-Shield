@@ -1,11 +1,9 @@
 /*
- * Copyright (c) 2010 by Cristian Maglie <c.maglie@bug.st>
- *
- * This file is free software; you can redistribute it and/or modify
- * it under the terms of either the GNU General Public License version 2
- * or the GNU Lesser General Public License version 2.1, both as
- * published by the Free Software Foundation.
- */
+   Copyright (c) 2018 by kikokushi <s468zhan@edu.uwaterloo.ca>
+
+   Please go ahead and use them.
+   No rule regarding uses of them.
+*/
 
 #ifndef	W5100_H_INCLUDED
 #define	W5100_H_INCLUDED
@@ -14,16 +12,18 @@
 
 #define W5200
 
+#define ETHERNET_SHIELD_SPI_CS 10
+
 #ifdef W5200
 #define MAX_SOCK_NUM 8
 #else
 #define MAX_SOCK_NUM 4
 #endif
 
-
 typedef uint8_t SOCKET;
 
-#ifndef W5200
+#ifdef W5200
+#else
 #define IDM_OR  0x8000
 #define IDM_AR0 0x8001
 #define IDM_AR1 0x8002
@@ -242,19 +242,20 @@ public:
   __GP_REGISTER8 (IMR,    0x0016);    // Interrupt Mask
   __GP_REGISTER16(RTR,    0x0017);    // Timeout address
   __GP_REGISTER8 (RCR,    0x0019);    // Retry count
-  
-  #ifndef W5200
+#ifdef W5200
+#else
   __GP_REGISTER8 (RMSR,   0x001A);    // Receive memory size
   __GP_REGISTER8 (TMSR,   0x001B);    // Transmit memory size
-  #endif
+#endif
   __GP_REGISTER8 (PATR,   0x001C);    // Authentication type address in PPPoE mode
   __GP_REGISTER8 (PTIMER, 0x0028);    // PPP LCP Request Timer
   __GP_REGISTER8 (PMAGIC, 0x0029);    // PPP LCP Magic Number
-  #ifndef W5200
+#ifdef W5200
+#else
   __GP_REGISTER_N(UIPR,   0x002A, 4); // Unreachable IP address in UDP mode
   __GP_REGISTER16(UPORT,  0x002E);    // Unreachable Port address in UDP mode
 #endif
-  
+
 #undef __GP_REGISTER8
 #undef __GP_REGISTER16
 #undef __GP_REGISTER_N
@@ -272,7 +273,6 @@ private:
 #else
   static const uint16_t CH_BASE = 0x0400;
 #endif  
-
   static const uint16_t CH_SIZE = 0x0100;
 
 #define __SOCKET_REGISTER8(name, address)                    \
@@ -336,7 +336,6 @@ private:
 #else
   static const int SOCKETS = 4;
 #endif
-
   static const uint16_t SMASK = 0x07FF; // Tx buffer MASK
   static const uint16_t RMASK = 0x07FF; // Rx buffer MASK
 public:
@@ -346,6 +345,46 @@ private:
   uint16_t SBASE[SOCKETS]; // Tx buffer base address
   uint16_t RBASE[SOCKETS]; // Rx buffer base address
 
+private:
+#if !defined(SPI_HAS_EXTENDED_CS_PIN_HANDLING)
+  #define SPI_ETHERNET_SETTINGS SPISettings(4000000, MSBFIRST, SPI_MODE0)
+  #if defined(ARDUINO_ARCH_AVR)
+    #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+      inline static void initSS()    { DDRB  |=  _BV(4); };
+      inline static void setSS()     { PORTB &= ~_BV(4); };
+      inline static void resetSS()   { PORTB |=  _BV(4); };
+    #elif defined(__AVR_ATmega32U4__)
+      inline static void initSS()    { DDRB  |=  _BV(6); };
+      inline static void setSS()     { PORTB &= ~_BV(6); };
+      inline static void resetSS()   { PORTB |=  _BV(6); };
+    #elif defined(__AVR_AT90USB1286__) || defined(__AVR_AT90USB646__) || defined(__AVR_AT90USB162__)
+      inline static void initSS()    { DDRB  |=  _BV(0); };
+      inline static void setSS()     { PORTB &= ~_BV(0); };
+      inline static void resetSS()   { PORTB |=  _BV(0); };
+    #else
+      inline static void initSS()    { DDRB  |=  _BV(2); };
+      inline static void setSS()     { PORTB &= ~_BV(2); };
+      inline static void resetSS()   { PORTB |=  _BV(2); };
+    #endif
+  #elif defined(__ARDUINO_ARC__)
+	inline static void initSS() { pinMode(10, OUTPUT); };
+	inline static void setSS() { digitalWrite(10, LOW); };
+	inline static void resetSS() { digitalWrite(10, HIGH); };
+  #else
+  inline static void initSS() {
+    *portModeRegister(digitalPinToPort(ETHERNET_SHIELD_SPI_CS)) |= digitalPinToBitMask(ETHERNET_SHIELD_SPI_CS);
+  }
+  inline static void setSS()   {
+    *portOutputRegister(digitalPinToPort(ETHERNET_SHIELD_SPI_CS)) &= ~digitalPinToBitMask(ETHERNET_SHIELD_SPI_CS);
+  }
+  inline static void resetSS() {
+    *portOutputRegister(digitalPinToPort(ETHERNET_SHIELD_SPI_CS)) |= digitalPinToBitMask(ETHERNET_SHIELD_SPI_CS);
+  }
+  #endif
+#else
+  #define SPI_ETHERNET_SETTINGS ETHERNET_SHIELD_SPI_CS,SPISettings(4000000, MSBFIRST, SPI_MODE0)
+  // initSS(), setSS(), resetSS() not needed with EXTENDED_CS_PIN_HANDLING
+#endif
 };
 
 extern W5100Class W5100;
